@@ -1,0 +1,52 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+build/
+
+# Android
+android/.gradle/
+android/.kotlin/
+android/app/release/
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+build/
+.gradle/
+local.properties
+*.keystore
+!debug.keystore
+
+# Windows
+windows/flutter/ephemeral/
+*.exe
+*.dll
+*.lib
+*.pdb
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Release
+release/
+*.zip
+*.tar.gz

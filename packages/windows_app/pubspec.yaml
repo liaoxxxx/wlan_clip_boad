@@ -1,0 +1,25 @@
+name: clip_sync_windows
+description: Windows 剪贴板服务器 - 接收 Android 端文本并自动输入
+publish_to: 'none'
+version: 2.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  web_socket_channel: ^2.4.0
+  win32: ^5.2.0
+  shared_preferences: ^2.2.2
+  # 引用本地 common 包
+  clip_sync_common:
+    path: ../common
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
