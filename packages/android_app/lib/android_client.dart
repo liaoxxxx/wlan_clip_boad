@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../common/constants.dart';
-import '../common/utils.dart';
+import 'package:clip_sync_common/clip_sync_common.dart';
 
 /// Android 端：输入捕获 + WebSocket 客户端（支持 WiFi 连接）
 class AndroidVoiceClient extends StatelessWidget {

@@ -44,3 +44,7 @@ app.*.map.json
 
 # Windows specific
 /windows/flutter/ephemeral/
+
+# Release directory - only keep windows subdirectory
+/release/*
+!/release/windows/

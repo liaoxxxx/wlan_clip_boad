@@ -5,7 +5,7 @@
 library clip_sync_common;
 
 // 导出常量
-export 'lib/constants.dart';
+export 'constants.dart';
 
 // 导出工具类
-export 'lib/utils.dart';
+export 'utils.dart';
