@@ -43,7 +43,7 @@ Windows 客户端现在支持两种文本同步模式：
 
 1. **启动 Windows 服务器**
    ```bash
-   cd clip_sync_usb
+   cd packages/windows_app
    flutter run -d windows
    ```
 

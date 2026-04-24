@@ -41,6 +41,6 @@ if %errorlevel% neq 0 (
 
 echo.
 echo ✅ 构建完成！
-echo 📦 EXE 位置: release\windows\clip_sync_usb.exe
+echo 📦 EXE 位置: release\windows\clip_sync_wifi.exe
 echo.
 pause

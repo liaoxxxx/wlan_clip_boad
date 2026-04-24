@@ -169,7 +169,7 @@ echo   - Status: %ANDROID_STATUS%
 echo.
 echo Windows App:
 echo   - Location: build\windows\x64\runner\Release\
-echo   - Executable: clip_sync_usb.exe
+echo   - Executable: clip_sync_wifi.exe
 echo.
 echo To run the apps:
 echo   1. Double-click start_sync.bat for automatic startup

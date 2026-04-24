@@ -23,8 +23,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   final List<String> _logs = [];
   
   // 输入模式：true=直接输入到焦点窗口，false=仅写入剪贴板
-  bool _autoTypeMode = false;
+  bool _autoTypeMode = true; // 默认开启自动输入模式
   bool _usePasteMethod = true; // 使用粘贴方式（Ctrl+V）而非逐字符输入
+  
+  // 最近接收的文本
+  String _lastReceivedText = '';
 
   @override
   void initState() {
@@ -75,6 +78,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
         (data) async {
           final text = data.toString();
           AppLogger.info('收到文本: ${text.length > 50 ? text.substring(0, 50) + "..." : text}');
+          
+          // 更新最后接收的文本（用于显示）
+          setState(() {
+            _lastReceivedText = text;
+          });
           
           if (_autoTypeMode) {
             // 自动输入模式：直接输入到当前焦点窗口
@@ -175,7 +183,7 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
               // 状态卡片
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.blueGrey.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
@@ -186,11 +194,76 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                   children: [
                     const Text(
                       '🖥️ 服务器状态',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 8),
-                    Text(_status, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(_status, style: const TextStyle(fontSize: 12)),
                   ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 实时文本显示区域
+              Flexible(
+                flex: 2,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            '📝 接收的文本',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          if (_lastReceivedText.isNotEmpty)
+                            TextButton.icon(
+                              icon: const Icon(Icons.copy, size: 16),
+                              label: const Text('复制', style: TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                _setClipboard(_lastReceivedText);
+                                _addLog('📋 已复制到最后接收的文本');
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                minimumSize: Size.zero,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Text(
+                              _lastReceivedText.isEmpty 
+                                  ? '等待接收文本...'
+                                  : _lastReceivedText,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontFamily: 'Consolas',
+                                color: _lastReceivedText.isEmpty ? Colors.grey : Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -198,7 +271,7 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
               // 输入模式选择
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -206,19 +279,20 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      '⌨️ 输入模式设置',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      '⌨️ 输入模式',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
-                    const SizedBox(height: 8),
                     SwitchListTile(
-                      title: const Text('自动输入模式', style: TextStyle(fontSize: 13)),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('自动输入模式', style: TextStyle(fontSize: 12)),
                       subtitle: Text(
                         _autoTypeMode 
                             ? '收到文本后直接输入到当前焦点窗口'
                             : '收到文本后仅写入剪贴板',
-                        style: const TextStyle(fontSize: 11),
+                        style: const TextStyle(fontSize: 10),
                       ),
                       value: _autoTypeMode,
                       onChanged: (value) {
@@ -231,10 +305,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                     ),
                     if (_autoTypeMode)
                       Padding(
-                        padding: const EdgeInsets.only(left: 16, top: 4),
+                        padding: const EdgeInsets.only(left: 16),
                         child: SwitchListTile(
-                          title: const Text('使用粘贴方式 (Ctrl+V)', style: TextStyle(fontSize: 12)),
-                          subtitle: const Text('更快，适合长文本', style: TextStyle(fontSize: 10)),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('使用粘贴方式 (Ctrl+V)', style: TextStyle(fontSize: 11)),
+                          subtitle: const Text('更快，适合长文本', style: TextStyle(fontSize: 9)),
                           value: _usePasteMethod,
                           onChanged: (value) {
                             setState(() {
@@ -249,26 +324,23 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
               ),
               const SizedBox(height: 16),
               
-              // 使用说明
+              // 使用说明（简化版）
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Column(
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('📝 使用说明:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('1. 查看本机 IP: 运行 ipconfig (IPv4 地址)'),
-                    Text('2. 在 Android 端设置此 IP 地址'),
-                    Text('3. 确保手机和 PC 在同一 WiFi 网络'),
-                    Text('4. 启动 Android 客户端并连接'),
-                    Text('5. 选择输入模式：剪贴板 或 自动输入'),
-                    Text('6. 如使用自动输入，请将光标放在目标输入框'),
-                    Text('7. 保持此窗口最小化运行即可'),
+                    Text('💡 提示:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    SizedBox(height: 2),
+                    Text('• 自动输入模式已默认开启', style: TextStyle(fontSize: 10)),
+                    Text('• 将光标放在目标输入框即可自动输入', style: TextStyle(fontSize: 10)),
+                    Text('• 接收的文本会实时显示在上方', style: TextStyle(fontSize: 10)),
                   ],
                 ),
               ),
