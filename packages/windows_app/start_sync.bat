@@ -1,11 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 
-chcp 65001 >nul 2>&1
-
 echo ========================================
-echo   Android Voice to Windows Clipboard
-echo   WiFi Wireless Mode - Auto Start
+echo   Clip Sync WiFi - Auto Start
 echo ========================================
 echo.
 
@@ -21,44 +18,40 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /C:"IPv4"') do (
 if defined LOCAL_IP (
     echo [OK] Local IP: %LOCAL_IP%
 ) else (
-    echo [WARN] Could not detect IP. Please check manually with 'ipconfig'
+    echo [WARN] Could not detect IP. Run 'ipconfig' manually.
     set "LOCAL_IP=unknown"
 )
 echo.
 
-REM --- Check Firewall ---
-echo [2/3] Checking firewall settings...
-echo Note: Make sure port 8889 is allowed through Windows Firewall
-echo To add firewall rule, run as Administrator:
+REM --- Firewall Info ---
+echo [2/3] Firewall settings...
+echo Note: Ensure port 8889 is allowed in Windows Firewall
+echo Admin command to add rule:
 echo   netsh advfirewall firewall add rule name="ClipSync" dir=in action=allow protocol=TCP localport=8889
 echo.
 
-REM --- Start Apps ---
-echo [3/3] Starting applications...
+REM --- Start App ---
+echo [3/3] Starting Windows server...
 echo.
-echo Tips:
-echo    - Windows will run as WebSocket server on port 8889
-echo    - In Android app, tap Settings (gear icon) to configure PC IP
-echo    - Enter the IP shown above: %LOCAL_IP%
-echo    - Make sure both devices are on the same WiFi network
+echo Usage:
+echo   - Windows runs as WebSocket server on port 8889
+echo   - Android app: Settings -^> Enter PC IP: %LOCAL_IP%
+echo   - Both devices must be on same WiFi network
 echo.
-echo Press any key to start the apps...
+echo Press any key to start...
 pause >nul
 
 echo.
-echo Starting Windows server...
-start "WinServer" cmd /c "flutter run -d windows"
-
-echo Waiting 5 seconds for Windows to initialize...
-ping 127.0.0.1 -n 6 >nul
-
-echo.
-echo Starting Android client...
-start "AndroidClient" cmd /c "flutter run -d android"
+echo Starting Clip Sync WiFi server...
+start "ClipSync-Windows" cmd /k "cd /d %~dp0 && flutter run -d windows"
 
 echo.
 echo ========================================
-echo   Applications launched in new windows!
-echo   Close the console windows to stop.
+echo   Windows server started in new window!
+echo   Install Android APK manually:
+echo     release\android\clip_sync_android.apk
+echo   Command:
+echo     adb install release\android\clip_sync_android.apk
 echo ========================================
+echo.
 exit /b 0

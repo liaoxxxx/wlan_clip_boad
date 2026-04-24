@@ -11,7 +11,10 @@ dependencies:
     sdk: flutter
   web_socket_channel: ^2.4.0
   win32: ^5.2.0
+  ffi: ^2.1.0
   shared_preferences: ^2.2.2
+  system_tray: ^2.0.3
+  bitsdojo_window: ^0.1.6
   # 引用本地 common 包
   clip_sync_common:
     path: ../common
@@ -23,3 +26,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icons/
