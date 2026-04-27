@@ -452,9 +452,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
         ),
         body: Padding(
           padding: _isMinimalMode ? const EdgeInsets.all(8) : const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
               // 服务器状态 - 可折叠
               if (!_isMinimalMode)
                 _buildCollapsibleCard(
@@ -512,19 +514,22 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
               if (!_isMinimalMode) const SizedBox(height: 8),
               
               // 实时文本显示区域 - 始终显示，核心组件（可折叠但默认展开）
-              Flexible(
-                flex: _isMinimalMode ? 1 : 2,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.purple.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              Container(
+                width: double.infinity,
+                constraints: BoxConstraints(
+                  minHeight: _isMinimalMode ? 100 : 150,
+                  maxHeight: _isMinimalMode ? 150 : 250,
+                ),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                       // 标题栏 - 可点击折叠
                       InkWell(
                         onTap: () {
@@ -572,7 +577,7 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                       // 内容区域 - 展开时显示
                       if (_textInputExpanded) ...[
                         const SizedBox(height: 8),
-                        Expanded(
+                        Flexible(
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(8),
@@ -595,8 +600,7 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                           ),
                         ),
                       ],
-                    ],
-                  ),
+                  ],
                 ),
               ),
               if (!_isMinimalMode) const SizedBox(height: 8),
@@ -727,40 +731,40 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                   },
                   headerColor: Colors.grey,
                   borderColor: Colors.grey,
-                  child: Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _logs.isEmpty
-                          ? const Center(
-                              child: Text(
-                                '等待连接...',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: _logs.length,
-                              itemBuilder: (context, index) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text(
-                                    _logs[index],
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontFamily: 'Consolas',
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                  child: Container(
+                    width: double.infinity,
+                    height: 200, // 固定高度
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: _logs.isEmpty
+                        ? const Center(
+                            child: Text(
+                              '等待连接...',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _logs.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  _logs[index],
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'Consolas',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
