@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   web_socket_channel: ^2.4.0
   shared_preferences: ^2.2.2
+  file_picker: ^8.0.0
+  permission_handler: ^11.3.0
   # 引用本地 common 包
   clip_sync_common:
     path: ../common

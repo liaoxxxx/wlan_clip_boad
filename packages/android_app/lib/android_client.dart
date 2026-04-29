@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:clip_sync_common/clip_sync_common.dart';
+import 'features/file_manager/file_picker_service.dart';
+import 'widgets/file_selector_chip.dart';
 
 /// Android 端：输入捕获 + WebSocket 客户端（支持 WiFi 连接）
 class AndroidVoiceClient extends StatelessWidget {
@@ -37,6 +39,9 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   
   String _serverHost = AppConstants.defaultWebsocketHost;
   int _serverPort = AppConstants.defaultWebsocketPort;
+
+  final FilePickerService _filePickerService = FilePickerService();
+  FileMessageModel? _selectedFile;
 
   @override
   void initState() {
@@ -243,17 +248,38 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   /// 手动发送按钮
   void _manualSend() {
     final text = _controller.text.trim();
-    if (text.isEmpty || _connectionState != AppConnectionState.connected) return;
+    if (text.isEmpty && _selectedFile == null) return;
+    if (_connectionState != AppConnectionState.connected) return;
     
-    _channel?.sink.add(text);
-    _sendCount++;
-    AppLogger.success('手动发送: $text');
+    // 如果有选中的文件，先发送文件信息
+    if (_selectedFile != null) {
+      _channel?.sink.add(_selectedFile!.toJsonString());
+      AppLogger.success('已发送文件信息: ${_selectedFile!.name}');
+      setState(() => _selectedFile = null);
+    }
+
+    // 发送文本内容
+    if (text.isNotEmpty) {
+      _channel?.sink.add(text);
+      _sendCount++;
+      AppLogger.success('手动发送: $text');
+    }
   }
 
   /// 清空输入
   void _clearInput() {
     _controller.clear();
+    setState(() => _selectedFile = null);
     _debounce.cancel();
+  }
+
+  /// 触发文件选择
+  Future<void> _pickFile() async {
+    final file = await _filePickerService.pickFile();
+    if (file != null && mounted) {
+      setState(() => _selectedFile = file);
+      AppLogger.info('已选择文件: ${file.name}');
+    }
   }
 
   String _getStatusText() {
@@ -286,6 +312,7 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   Widget build(BuildContext context) {
     AppLogger.info('build() 被调用，当前状态: $_connectionState');
     return Scaffold(
+      resizeToAvoidBottomInset: true, // 防止软键盘弹出时布局溢出
       appBar: AppBar(
         title: const Text('🎤 WiFi 语音剪贴板'),
         backgroundColor: Colors.teal,
@@ -308,163 +335,218 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-              // 使用说明手风琴
-              Card(
-                margin: EdgeInsets.zero,
-                child: ExpansionTile(
-                  title: const Text(
-                    '📝 使用步骤',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  collapsedBackgroundColor: Colors.blueGrey.withOpacity(0.2),
-                  backgroundColor: Colors.blueGrey.withOpacity(0.3),
+      body: Column(
+        children: [
+          // 顶部固定区域：连接状态和按钮
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 连接状态和按钮 - 水平布局
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('1. 点击右上角 ⚙️ 设置 PC IP 地址'),
-                          SizedBox(height: 4),
-                          Text('2. 点击「连接到 PC」按钮建立连接'),
-                          SizedBox(height: 4),
-                          Text('3. 点击下方输入框唤起键盘'),
-                          SizedBox(height: 4),
-                          Text('4. 使用麦克风语音输入'),
-                          SizedBox(height: 4),
-                          Text('5. 识别完成后自动同步至 PC 剪贴板'),
-                        ],
+                    // 连接状态（占据剩余空间）
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _getStatusText(),
+                          style: const TextStyle(fontSize: 12),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    
+                    // 连接/断开按钮（固定宽度）
+                    SizedBox(
+                      width: 120,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        icon: Icon(
+                          _connectionState == AppConnectionState.connected 
+                            ? Icons.link_off 
+                            : Icons.wifi,
+                          size: 18,
+                        ),
+                        label: Text(
+                          _connectionState == AppConnectionState.connected 
+                            ? '断开' 
+                            : '连接',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _connectionState == AppConnectionState.connected 
+                            ? Colors.redAccent 
+                            : Colors.teal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () {
+                          AppLogger.info('点击连接/断开按钮，当前状态: $_connectionState');
+                          if (_connectionState == AppConnectionState.connected) {
+                            // 断开连接
+                            AppLogger.info('执行断开连接操作');
+                            _channel?.sink.close();
+                            setState(() => _connectionState = AppConnectionState.disconnected);
+                            AppLogger.connection('已手动断开连接');
+                          } else {
+                            // 连接
+                            AppLogger.info('执行连接操作，目标: $_serverHost:$_serverPort');
+                            _reconnect();
+                          }
+                        },
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              
-              // 输入框
-              TextField(
-                controller: _controller,
-                maxLines: 6,
-                decoration: InputDecoration(
-                  hintText: '🎤 在此点击使用语音输入...',
-                  border: const OutlineInputBorder(),
-                  filled: true,
-                  fillColor: const Color(0xFF2C2C2C),
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: _manualSend,
-                        tooltip: '手动发送',
+              ],
+            ),
+          ),
+          
+          // 中间可扩展区域：文本输入框
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  // 文件选择状态展示
+                  if (_selectedFile != null)
+                    FileSelectorChip(
+                      file: _selectedFile!,
+                      onRemove: () => setState(() => _selectedFile = null),
+                    ),
+                  // 文本输入框
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      maxLines: null, // 无限行数，支持多行输入和内部滚动
+                      minLines: 10, // 最小显示10行
+                      expands: false,
+                      decoration: InputDecoration(
+                        hintText: '🎤 在此点击使用语音输入...\n\n支持多行文本输入，内容会自动滚动',
+                        border: const OutlineInputBorder(),
+                        filled: true,
+                        fillColor: const Color(0xFF2C2C2C),
+                        contentPadding: const EdgeInsets.all(16),
+                        prefixIcon: IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          onPressed: _pickFile,
+                          tooltip: '添加文件/图片',
+                        ),
+                        suffixIcon: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.send),
+                              onPressed: _manualSend,
+                              tooltip: '手动发送',
+                              iconSize: 20,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: _clearInput,
+                              tooltip: '清空',
+                              iconSize: 20,
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: _clearInput,
-                        tooltip: '清空',
+                      onChanged: _onTextChanged,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // 底部固定区域：使用步骤和提示信息
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              children: [
+                // 使用步骤
+                Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: ExpansionTile(
+                    title: const Text(
+                      '📝 使用步骤',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    collapsedBackgroundColor: Colors.blueGrey.withOpacity(0.2),
+                    backgroundColor: Colors.blueGrey.withOpacity(0.3),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('1. 点击右上角 ⚙️ 设置 PC IP 地址'),
+                            SizedBox(height: 4),
+                            Text('2. 点击「连接到 PC」按钮建立连接'),
+                            SizedBox(height: 4),
+                            Text('3. 点击下方输入框唤起键盘'),
+                            SizedBox(height: 4),
+                            Text('4. 使用麦克风语音输入'),
+                            SizedBox(height: 4),
+                            Text('5. 识别完成后自动同步至 PC 剪贴板'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-                onChanged: _onTextChanged,
-              ),
-              const SizedBox(height: 16),
-              
-              // 连接状态
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _getStatusText(),
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // 连接/断开按钮
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  icon: Icon(
-                    _connectionState == AppConnectionState.connected 
-                      ? Icons.link_off 
-                      : Icons.wifi,
-                  ),
-                  label: Text(
-                    _connectionState == AppConnectionState.connected 
-                      ? '断开连接' 
-                      : '连接到 PC',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _connectionState == AppConnectionState.connected 
-                      ? Colors.redAccent 
-                      : Colors.teal,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () {
-                    AppLogger.info('点击连接/断开按钮，当前状态: $_connectionState');
-                    if (_connectionState == AppConnectionState.connected) {
-                      // 断开连接
-                      AppLogger.info('执行断开连接操作');
-                      _channel?.sink.close();
-                      setState(() => _connectionState = AppConnectionState.disconnected);
-                      AppLogger.connection('已手动断开连接');
-                    } else {
-                      // 连接
-                      AppLogger.info('执行连接操作，目标: $_serverHost:$_serverPort');
-                      _reconnect();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // 提示信息 - 可折叠版本
-              Card(
-                margin: EdgeInsets.zero,
-                child: ExpansionTile(
-                  title: const Text(
-                    '💡 提示',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  collapsedBackgroundColor: Colors.black26,
-                  backgroundColor: Colors.black26,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('• 确保手机和 PC 在同一局域网（同一 WiFi）'),
-                          const SizedBox(height: 4),
-                          const Text('• 在 Windows 端查看本机 IP 地址'),
-                          const SizedBox(height: 4),
-                          const Text('• 支持 Gboard、搜狗、微信等输入法语音输入'),
-                          const SizedBox(height: 4),
-                          const Text('• 停止输入 0.5 秒后自动发送'),
-                          const SizedBox(height: 8),
-                          Text(
-                            '📡 WiFi 无线版 - 无需 USB 线，自由连接',
-                            style: TextStyle(color: Colors.grey, fontSize: 11),
-                          ),
-                        ],
-                      ),
+                const SizedBox(height: 8),
+                
+                // 提示信息
+                Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: ExpansionTile(
+                    title: const Text(
+                      '💡 提示',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                  ],
+                    collapsedBackgroundColor: Colors.black26,
+                    backgroundColor: Colors.black26,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• 确保手机和 PC 在同一局域网（同一 WiFi）'),
+                            const SizedBox(height: 4),
+                            const Text('• 在 Windows 端查看本机 IP 地址'),
+                            const SizedBox(height: 4),
+                            const Text('• 支持 Gboard、搜狗、微信等输入法语音输入'),
+                            const SizedBox(height: 4),
+                            const Text('• 停止输入 0.5 秒后自动发送'),
+                            const SizedBox(height: 8),
+                            Text(
+                              '📡 WiFi 无线版 - 无需 USB 线，自由连接',
+                              style: TextStyle(color: Colors.grey, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+        ],
       ),
     );
   }

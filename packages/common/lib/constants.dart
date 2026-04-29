@@ -30,4 +30,5 @@ enum AppConnectionState {
 enum MessageType {
   text,
   command,
+  file,
 }
