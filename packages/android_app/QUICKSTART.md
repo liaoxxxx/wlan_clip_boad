@@ -25,7 +25,7 @@ ipconfig
 ### 步骤 1: 获取依赖
 
 ```bash
-cd clip_sync_usb
+cd packages/android_app
 flutter pub get
 ```
 

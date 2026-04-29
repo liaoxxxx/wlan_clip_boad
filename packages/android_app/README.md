@@ -80,7 +80,7 @@ flutter run -d <your_device_id>
 ## 🏗️ 项目结构
 
 ```
-clip_sync_usb/
+clip_sync_android/
 ├── lib/
 │   ├── main.dart                    # 主入口（平台自动路由）
 │   ├── common/                      # 共享代码

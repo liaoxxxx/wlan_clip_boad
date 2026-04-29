@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:clip_sync_common/clip_sync_common.dart';
 import 'package:win32/win32.dart' as win32;
 import 'package:bitsdojo_window/bitsdojo_window.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'clipboard_helper.dart';
 import 'tray_manager.dart';
 
@@ -25,6 +26,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   final List<String> _logs = [];
   String _localIP = '获取中...'; // 本机 IP 地址
   
+  // 服务器端口配置
+  int _serverPort = AppConstants.defaultWebsocketPort;
+  TextEditingController? _portController;
+  bool _isEditingPort = false;
+  
   // 输入模式：true=直接输入到焦点窗口，false=仅写入剪贴板
   bool _autoTypeMode = true; // 默认开启自动输入模式
   bool _usePasteMethod = true; // 使用粘贴方式（Ctrl+V）而非逐字符输入
@@ -45,6 +51,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   final TrayManager _trayManager = TrayManager();
   bool _isWindowHidden = false; // 窗口是否隐藏到托盘
   
+  // 剪贴板反馈动画
+  bool _showClipboardFeedback = false;
+  String _feedbackMessage = '';
+  Timer? _feedbackTimer;
+  
   // 窗口高度自适应
   double _windowHeight = 700.0; // 当前窗口高度
   static const double _compactThreshold = 450.0; // 紧凑模式阈值
@@ -55,6 +66,8 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   @override
   void initState() {
     super.initState();
+    _portController = TextEditingController(text: _serverPort.toString());
+    _loadPortConfig();
     _getLocalIP();
     _startServer();
     _initTray();
@@ -96,6 +109,116 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
 
   /// 判断是否为最小模式（只显示文本区域）
   bool get _isMinimalMode => _windowHeight < _minimalThreshold;
+
+  /// 加载端口配置
+  Future<void> _loadPortConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPort = prefs.getInt(AppConstants.prefServerPort);
+      
+      if (savedPort != null && savedPort > 0 && savedPort < 65536) {
+        setState(() {
+          _serverPort = savedPort;
+          _portController?.text = savedPort.toString();
+        });
+        AppLogger.info('已加载端口配置: $_serverPort');
+      }
+    } catch (e) {
+      AppLogger.warning('加载端口配置失败: $e');
+    }
+  }
+
+  /// 保存端口配置
+  Future<void> _savePortConfig(int port) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(AppConstants.prefServerPort, port);
+      AppLogger.success('端口配置已保存: $port');
+    } catch (e) {
+      AppLogger.error('保存端口配置失败: $e');
+    }
+  }
+
+  /// 重启服务器（使用新端口）
+  Future<void> _restartServer() async {
+    // 关闭当前服务器
+    await _server?.close();
+    _server = null;
+    _clientCount = 0;
+    
+    setState(() {
+      _status = '🔄 正在重启服务...';
+    });
+    
+    _addLog('🔄 正在重启服务器...');
+    
+    // 延迟一下再启动
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // 启动新服务器
+    await _startServer();
+  }
+
+  /// 应用新的端口设置
+  Future<void> _applyPortSettings() async {
+    final portText = _portController?.text.trim() ?? '';
+    final newPort = int.tryParse(portText);
+    
+    if (newPort == null || newPort <= 0 || newPort >= 65536) {
+      _addLog('❌ 端口号无效: $portText (必须为 1-65535)');
+      return;
+    }
+    
+    if (newPort == _serverPort) {
+      _addLog('ℹ️ 端口未变化: $newPort');
+      setState(() {
+        _isEditingPort = false;
+      });
+      return;
+    }
+    
+    // 保存新端口
+    await _savePortConfig(newPort);
+    
+    setState(() {
+      _serverPort = newPort;
+      _isEditingPort = false;
+    });
+    
+    _addLog('✅ 端口已更新: $newPort');
+    _addLog('🔄 正在重启服务器...');
+    
+    // 重启服务器
+    await _restartServer();
+  }
+
+  /// 取消编辑端口
+  void _cancelEditPort() {
+    setState(() {
+      _isEditingPort = false;
+      _portController?.text = _serverPort.toString();
+    });
+  }
+
+  /// 显示剪贴板反馈提示
+  void _showFeedback(String message) {
+    // 清除之前的定时器
+    _feedbackTimer?.cancel();
+    
+    setState(() {
+      _showClipboardFeedback = true;
+      _feedbackMessage = message;
+    });
+    
+    // 2秒后自动隐藏
+    _feedbackTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showClipboardFeedback = false;
+        });
+      }
+    });
+  }
 
   /// 获取本机局域网 IP 地址
   Future<void> _getLocalIP() async {
@@ -272,24 +395,24 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
       // 监听所有网络接口，支持 WiFi 连接
       _server = await HttpServer.bind(
         InternetAddress.anyIPv4, 
-        AppConstants.defaultWebsocketPort,
+        _serverPort,
       );
       
       final address = _server!.address.address == '0.0.0.0' ? '0.0.0.0' : _server!.address.address;
       
       _addLog('✅ 服务已启动');
-      _addLog('监听: $address:${AppConstants.defaultWebsocketPort} (WiFi模式)');
+      _addLog('监听: $address:$_serverPort (WiFi模式)');
       _addLog('等待 Android 连接...');
       
       setState(() {
-        _status = '✅ 服务运行中\n端口: ${AppConstants.defaultWebsocketPort}\n模式: WiFi 无线连接';
+        _status = '✅ 服务运行中\n端口: $_serverPort\n模式: WiFi 无线连接';
       });
       
-      AppLogger.success('WebSocket 服务器已启动，监听端口 ${AppConstants.defaultWebsocketPort}');
+      AppLogger.success('WebSocket 服务器已启动，监听端口 $_serverPort');
       
       _server!.listen(_handleConnection);
     } catch (e) {
-      final errorMsg = '❌ 启动失败: $e\n请检查端口 ${AppConstants.defaultWebsocketPort} 是否被占用';
+      final errorMsg = '❌ 启动失败: $e\n请检查端口 $_serverPort 是否被占用';
       _addLog(errorMsg);
       setState(() => _status = errorMsg);
       AppLogger.error('服务器启动失败: $e');
@@ -356,6 +479,8 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   /// 使用 Win32 API 直接写入剪贴板（不受窗口焦点/前台限制）
   Future<void> _setClipboard(String text) async {
     await WindowsClipboardHelper.setClipboard(text);
+    // 显示反馈提示
+    _showFeedback('✅ 已复制到剪贴板');
   }
 
   /// 自动输入文本到当前焦点窗口
@@ -450,13 +575,15 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
             ),
           ],
         ),
-        body: Padding(
-          padding: _isMinimalMode ? const EdgeInsets.all(8) : const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+        body: Stack(
+          children: [
+            Padding(
+              padding: _isMinimalMode ? const EdgeInsets.all(8) : const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
               // 服务器状态 - 可折叠
               if (!_isMinimalMode)
                 _buildCollapsibleCard(
@@ -505,6 +632,76 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                                 }
                               },
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // 端口配置
+                        Row(
+                          children: [
+                            const Icon(Icons.settings_ethernet, size: 16, color: Colors.blueAccent),
+                            const SizedBox(width: 4),
+                            const Text(
+                              '监听端口: ',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            if (_isEditingPort)
+                              Expanded(
+                                child: SizedBox(
+                                  height: 32,
+                                  child: TextField(
+                                    controller: _portController,
+                                    keyboardType: TextInputType.number,
+                                    style: const TextStyle(fontSize: 12),
+                                    decoration: const InputDecoration(
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Text(
+                                '$_serverPort',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontFamily: 'Consolas',
+                                  color: Colors.white,
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            if (_isEditingPort)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.check, size: 16, color: Colors.green),
+                                    tooltip: '应用',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: _applyPortSettings,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 16, color: Colors.red),
+                                    tooltip: '取消',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: _cancelEditPort,
+                                  ),
+                                ],
+                              )
+                            else
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 16),
+                                tooltip: '修改端口',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  setState(() {
+                                    _isEditingPort = true;
+                                  });
+                                },
+                              ),
                           ],
                         ),
                       ],
@@ -767,6 +964,50 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
             ),
           ),
         ),
+            // 剪贴板反馈提示
+            if (_showClipboardFeedback)
+              Positioned(
+                top: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _showClipboardFeedback ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(25),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            _feedbackMessage,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       ), // WillPopScope
     );
@@ -775,6 +1016,8 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   @override
   void dispose() {
     _windowSizeTimer?.cancel();
+    _feedbackTimer?.cancel();
+    _portController?.dispose();
     _trayManager.dispose();
     _server?.close();
     super.dispose();
