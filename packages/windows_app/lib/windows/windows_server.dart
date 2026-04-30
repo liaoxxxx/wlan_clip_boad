@@ -1117,12 +1117,16 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                         children: [
                           const Icon(Icons.check_circle, color: Colors.white, size: 20),
                           const SizedBox(width: 8),
-                          Text(
-                            _feedbackMessage,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                          Flexible(
+                            child: Text(
+                              _feedbackMessage,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ),
                         ],

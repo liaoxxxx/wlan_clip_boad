@@ -445,13 +445,13 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
                       files: _selectedFiles,
                       onRemove: (file) => setState(() => _selectedFiles.remove(file)),
                     ),
-                  // 文本输入框
+                  // 文本输入框 - 自动填充剩余高度
                   Expanded(
                     child: TextField(
                       controller: _controller,
-                      maxLines: null, // 无限行数，支持多行输入和内部滚动
-                      minLines: 10, // 最小显示10行
-                      expands: false,
+                      maxLines: null, // 无限行数
+                      expands: true, // 自动扩展填充父容器
+                      textAlignVertical: TextAlignVertical.top, // 文本从顶部开始
                       decoration: InputDecoration(
                         hintText: '🎤 在此点击使用语音输入...\n\n支持多行文本输入，内容会自动滚动',
                         border: const OutlineInputBorder(),
@@ -490,78 +490,83 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
             ),
           ),
           
-          // 底部固定区域：使用步骤和提示信息
+          // 底部固定区域：使用步骤和提示信息（两列布局）
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 使用步骤
-                Card(
-                  margin: EdgeInsets.zero,
-                  clipBehavior: Clip.antiAlias,
-                  child: ExpansionTile(
-                    title: const Text(
-                      '📝 使用步骤',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    collapsedBackgroundColor: Colors.blueGrey.withOpacity(0.2),
-                    backgroundColor: Colors.blueGrey.withOpacity(0.3),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('1. 点击右上角 ⚙️ 设置 PC IP 地址'),
-                            SizedBox(height: 4),
-                            Text('2. 点击「连接到 PC」按钮建立连接'),
-                            SizedBox(height: 4),
-                            Text('3. 点击下方输入框唤起键盘'),
-                            SizedBox(height: 4),
-                            Text('4. 使用麦克风语音输入'),
-                            SizedBox(height: 4),
-                            Text('5. 识别完成后自动同步至 PC 剪贴板'),
-                          ],
-                        ),
+                // 左列：使用步骤
+                Expanded(
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    child: ExpansionTile(
+                      title: const Text(
+                        '📝 使用步骤',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                    ],
+                      collapsedBackgroundColor: Colors.blueGrey.withOpacity(0.2),
+                      backgroundColor: Colors.blueGrey.withOpacity(0.3),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('1. 点击右上角 ⚙️ 设置 PC IP 地址', style: TextStyle(fontSize: 11)),
+                              SizedBox(height: 4),
+                              Text('2. 点击「连接到 PC」按钮建立连接', style: TextStyle(fontSize: 11)),
+                              SizedBox(height: 4),
+                              Text('3. 点击下方输入框唤起键盘', style: TextStyle(fontSize: 11)),
+                              SizedBox(height: 4),
+                              Text('4. 使用麦克风语音输入', style: TextStyle(fontSize: 11)),
+                              SizedBox(height: 4),
+                              Text('5. 识别完成后自动同步至 PC 剪贴板', style: TextStyle(fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                
-                // 提示信息
-                Card(
-                  margin: EdgeInsets.zero,
-                  clipBehavior: Clip.antiAlias,
-                  child: ExpansionTile(
-                    title: const Text(
-                      '💡 提示',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    collapsedBackgroundColor: Colors.black26,
-                    backgroundColor: Colors.black26,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• 确保手机和 PC 在同一局域网（同一 WiFi）'),
-                            const SizedBox(height: 4),
-                            const Text('• 在 Windows 端查看本机 IP 地址'),
-                            const SizedBox(height: 4),
-                            const Text('• 支持 Gboard、搜狗、微信等输入法语音输入'),
-                            const SizedBox(height: 4),
-                            const Text('• 停止输入 0.5 秒后自动发送'),
-                            const SizedBox(height: 8),
-                            Text(
-                              '📡 WiFi 无线版 - 无需 USB 线，自由连接',
-                              style: TextStyle(color: Colors.grey, fontSize: 11),
-                            ),
-                          ],
-                        ),
+                const SizedBox(width: 8),
+
+                // 右列：提示信息
+                Expanded(
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    child: ExpansionTile(
+                      title: const Text(
+                        '💡 提示',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                    ],
+                      collapsedBackgroundColor: Colors.black26,
+                      backgroundColor: Colors.black26,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('• 确保手机和 PC 在同一局域网（同一 WiFi）', style: TextStyle(fontSize: 11)),
+                              const SizedBox(height: 4),
+                              const Text('• 在 Windows 端查看本机 IP 地址', style: TextStyle(fontSize: 11)),
+                              const SizedBox(height: 4),
+                              const Text('• 支持 Gboard、搜狗、微信等输入法语音输入', style: TextStyle(fontSize: 11)),
+                              const SizedBox(height: 4),
+                              const Text('• 停止输入 0.5 秒后自动发送', style: TextStyle(fontSize: 11)),
+                              const SizedBox(height: 8),
+                              Text(
+                                '📡 WiFi 无线版 - 无需 USB 线，自由连接',
+                                style: TextStyle(color: Colors.grey, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
