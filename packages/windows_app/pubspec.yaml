@@ -15,6 +15,7 @@ dependencies:
   shared_preferences: ^2.2.2
   system_tray: ^2.0.3
   bitsdojo_window: ^0.1.6
+  path_provider: ^2.1.1
   # 引用本地 common 包
   clip_sync_common:
     path: ../common

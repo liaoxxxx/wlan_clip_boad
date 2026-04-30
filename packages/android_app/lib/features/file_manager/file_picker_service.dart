@@ -1,33 +1,54 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:clip_sync_common/clip_sync_common.dart';
 
 /// 文件信息模型
 class FileMessageModel {
   final String name;
   final int size;
   final String path;
+  final bool isImage;
 
   FileMessageModel({
     required this.name,
     required this.size,
     required this.path,
+    this.isImage = false,
   });
 
   Map<String, dynamic> toJson() => {
-        'type': 'file',
+        'type': isImage ? 'image' : 'file',
         'name': name,
         'size': size,
         'path': path,
+        if (isImage) 'data': _readAsBase64(),
       };
+
+  String? _readAsBase64() {
+    try {
+      final file = File(path);
+      final bytes = file.readAsBytesSync();
+      return base64Encode(bytes);
+    } catch (e) {
+      print('读取图片文件失败: $e');
+      return null;
+    }
+  }
 
   String toJsonString() => jsonEncode(toJson());
 
   static FileMessageModel fromPlatformFile(PlatformFile file) {
+    // 简单判断是否为图片
+    final ext = file.extension?.toLowerCase();
+    final isImg = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+    
     return FileMessageModel(
       name: file.name,
       size: file.size,
       path: file.path ?? '',
+      isImage: isImg,
     );
   }
 }
@@ -51,26 +72,35 @@ class FilePickerService {
     return storageStatus.isGranted;
   }
 
-  /// 选择单个文件（支持图片和通用文件）
-  Future<FileMessageModel?> pickFile() async {
+  /// 选择多个图片文件
+  Future<List<FileMessageModel>> pickMultipleImages() async {
     final hasPermission = await _ensurePermissions();
     if (!hasPermission) {
       print('存储权限被拒绝');
-      return null;
+      return [];
     }
 
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any, // 允许选择任何类型的文件
-        allowMultiple: false,
+        type: FileType.image, // 仅允许选择图片
+        allowMultiple: true,
       );
 
-      if (result != null && result.files.single.path != null) {
-        return FileMessageModel.fromPlatformFile(result.files.single);
+      if (result != null) {
+        final models = result.files
+            .where((file) => file.path != null)
+            .map((file) => FileMessageModel.fromPlatformFile(file))
+            .toList();
+        
+        // 如果超过限制，截取前 N 张
+        if (models.length > AppConstants.maxImageSelection) {
+          return models.sublist(0, AppConstants.maxImageSelection);
+        }
+        return models;
       }
     } catch (e) {
-      print('文件选择失败: $e');
+      print('图片选择失败: $e');
     }
-    return null;
+    return [];
   }
 }

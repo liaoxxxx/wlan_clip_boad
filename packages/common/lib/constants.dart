@@ -16,6 +16,9 @@ class AppConstants {
   
   // 重连间隔（秒）
   static const int reconnectIntervalSec = 3;
+
+  // 图片选择限制
+  static const int maxImageSelection = 9;
 }
 
 /// 应用连接状态枚举（避免与 Flutter 内置 ConnectionState 冲突）
@@ -31,4 +34,5 @@ enum MessageType {
   text,
   command,
   file,
+  image,
 }

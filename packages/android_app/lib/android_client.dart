@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,7 +42,7 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   int _serverPort = AppConstants.defaultWebsocketPort;
 
   final FilePickerService _filePickerService = FilePickerService();
-  FileMessageModel? _selectedFile;
+  List<FileMessageModel> _selectedFiles = [];
 
   @override
   void initState() {
@@ -248,14 +249,15 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   /// 手动发送按钮
   void _manualSend() {
     final text = _controller.text.trim();
-    if (text.isEmpty && _selectedFile == null) return;
+    if (text.isEmpty && _selectedFiles.isEmpty) return;
     if (_connectionState != AppConnectionState.connected) return;
     
-    // 如果有选中的文件，先发送文件信息
-    if (_selectedFile != null) {
-      _channel?.sink.add(_selectedFile!.toJsonString());
-      AppLogger.success('已发送文件信息: ${_selectedFile!.name}');
-      setState(() => _selectedFile = null);
+    // 如果有选中的文件，打包发送
+    if (_selectedFiles.isNotEmpty) {
+      final filesJson = jsonEncode(_selectedFiles.map((f) => f.toJson()).toList());
+      _channel?.sink.add(filesJson);
+      AppLogger.success('已发送 ${_selectedFiles.length} 个图片');
+      setState(() => _selectedFiles.clear());
     }
 
     // 发送文本内容
@@ -269,16 +271,35 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
   /// 清空输入
   void _clearInput() {
     _controller.clear();
-    setState(() => _selectedFile = null);
+    setState(() => _selectedFiles.clear());
     _debounce.cancel();
   }
 
   /// 触发文件选择
   Future<void> _pickFile() async {
-    final file = await _filePickerService.pickFile();
-    if (file != null && mounted) {
-      setState(() => _selectedFile = file);
-      AppLogger.info('已选择文件: ${file.name}');
+    final currentCount = _selectedFiles.length;
+    if (currentCount >= AppConstants.maxImageSelection) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('最多只能选择 ${AppConstants.maxImageSelection} 张图片')),
+      );
+      return;
+    }
+
+    final files = await _filePickerService.pickMultipleImages();
+    if (files.isNotEmpty && mounted) {
+      setState(() {
+        // 确保总数不超过限制
+        final remainingSlots = AppConstants.maxImageSelection - _selectedFiles.length;
+        final toAdd = files.take(remainingSlots).toList();
+        _selectedFiles.addAll(toAdd);
+      });
+      
+      if (files.length > (AppConstants.maxImageSelection - currentCount)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已自动截取前 ${AppConstants.maxImageSelection} 张图片')),
+        );
+      }
+      AppLogger.info('已选择 ${_selectedFiles.length} 个图片');
     }
   }
 
@@ -418,11 +439,11 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                  // 文件选择状态展示
-                  if (_selectedFile != null)
-                    FileSelectorChip(
-                      file: _selectedFile!,
-                      onRemove: () => setState(() => _selectedFile = null),
+                  // 图片选择状态展示
+                  if (_selectedFiles.isNotEmpty)
+                    SelectedImagePreview(
+                      files: _selectedFiles,
+                      onRemove: (file) => setState(() => _selectedFiles.remove(file)),
                     ),
                   // 文本输入框
                   Expanded(
@@ -437,11 +458,6 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
                         filled: true,
                         fillColor: const Color(0xFF2C2C2C),
                         contentPadding: const EdgeInsets.all(16),
-                        prefixIcon: IconButton(
-                          icon: const Icon(Icons.attach_file),
-                          onPressed: _pickFile,
-                          tooltip: '添加文件/图片',
-                        ),
                         suffixIcon: Column(
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -457,6 +473,11 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
                               onPressed: _clearInput,
                               tooltip: '清空',
                               iconSize: 20,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.attach_file),
+                              onPressed: _pickFile,
+                              tooltip: '添加文件/图片',
                             ),
                           ],
                         ),

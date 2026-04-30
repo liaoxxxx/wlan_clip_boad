@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:clip_sync_common/clip_sync_common.dart';
@@ -7,6 +8,8 @@ import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'clipboard_helper.dart';
 import 'tray_manager.dart';
+import '../features/image_preview/image_message_model.dart';
+import '../features/media_manager/media_manager_widget.dart';
 
 // 延迟加载 Windows 专用的键盘输入模块
 import 'keyboard_input_helper.dart' deferred as keyboard;
@@ -46,6 +49,11 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
   
   // 最近接收的文本
   String _lastReceivedText = '';
+  
+  // 媒体管理相关（整合文件与图片）
+  List<Map<String, dynamic>> _receivedFiles = []; // 接收到的文件列表
+  List<ImageMessageModel> _receivedImages = []; // 接收到的图片列表
+  bool _mediaManagerExpanded = true; // 媒体管理区域折叠状态
   
   // 系统托盘管理器
   final TrayManager _trayManager = TrayManager();
@@ -429,7 +437,39 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
       
       socket.listen(
         (data) async {
-          final text = data.toString();
+          final rawMessage = data.toString();
+          
+          // 尝试解析为 JSON 消息
+          try {
+            final dynamic decoded = jsonDecode(rawMessage);
+            
+            // 处理图片数组（多选发送）
+            if (decoded is List) {
+              for (var item in decoded) {
+                if (item is Map<String, dynamic> && item['type'] == 'image') {
+                  await _handleImageMessage(item);
+                }
+              }
+              return;
+            }
+
+            // 处理单个对象
+            if (decoded is Map<String, dynamic>) {
+              if (decoded['type'] == 'file') {
+                await _handleFileMessage(decoded);
+                return;
+              }
+              if (decoded['type'] == 'image') {
+                await _handleImageMessage(decoded);
+                return;
+              }
+            }
+          } catch (_) {
+            // 如果不是 JSON，则按纯文本处理
+          }
+          
+          // 处理纯文本消息
+          final text = rawMessage;
           
           // 详细日志：接收文本
           AppLogger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -519,6 +559,72 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
       AppLogger.error('📍 [自动输入] 堆栈跟踪:\n$stackTrace');
       rethrow;
     }
+  }
+
+  /// 处理图片消息
+  Future<void> _handleImageMessage(Map<String, dynamic> jsonMap) async {
+    final imageModel = ImageMessageModel.fromJson(jsonMap);
+    if (imageModel == null) return;
+
+    AppLogger.info('🖼️ 收到图片: ${imageModel.name} (${imageModel.size} bytes)');
+    _addLog('🖼️ 收到图片: ${imageModel.name}');
+    
+    setState(() {
+      _receivedImages.insert(0, imageModel);
+    });
+    
+    _showFeedback('🖼️ 收到图片: ${imageModel.name}');
+  }
+
+  /// 处理文件元数据消息
+  Future<void> _handleFileMessage(Map<String, dynamic> jsonMap) async {
+    final fileName = jsonMap['name'] ?? 'unknown';
+    final fileSize = jsonMap['size'] ?? 0;
+    final filePath = jsonMap['path'] ?? '';
+    
+    AppLogger.info('📁 收到文件元数据: $fileName ($fileSize bytes)');
+    _addLog('📁 收到文件: $fileName (${_formatFileSize(fileSize)})');
+    
+    final fileInfo = {
+      'name': fileName,
+      'size': fileSize,
+      'path': filePath,
+      'time': DateTime.now().toString(),
+      'status': '待保存',
+    };
+    
+    setState(() {
+      _receivedFiles.insert(0, fileInfo);
+    });
+    
+    // 显示反馈提示
+    _showFeedback('📁 收到文件: $fileName');
+    
+    // TODO: 后续在此处实现二进制流接收逻辑
+    // 目前 Android 端仅发送了元数据，Windows 端记录日志并展示在 UI 中
+  }
+
+  /// 保存文件（模拟/预留接口）
+  Future<void> _saveFile(Map<String, dynamic> file) async {
+    _addLog('💾 正在保存文件: ${file['name']}...');
+    
+    // TODO: 实现真实的文件保存逻辑
+    // 1. 弹出文件选择器让用户选择保存路径
+    // 2. 如果 Android 端支持，通过 WebSocket 接收二进制流并写入文件
+    // 3. 更新文件状态为“已保存”
+    
+    setState(() {
+      file['status'] = '已保存 (模拟)';
+    });
+    
+    _addLog('✅ 文件保存完成 (模拟): ${file['name']}');
+    _showFeedback('✅ 文件已保存: ${file['name']}');
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   void _addLog(String message) {
@@ -801,6 +907,25 @@ class _WindowsClipboardServerState extends State<WindowsClipboardServer> {
                 ),
               ),
               if (!_isMinimalMode) const SizedBox(height: 8),
+              
+              // 媒体管理区域 - 可折叠 (整合了文件与图片)
+              if (!_isMinimalMode)
+                _buildCollapsibleCard(
+                  title: '📂 媒体管理',
+                  isExpanded: _mediaManagerExpanded,
+                  onToggle: () {
+                    setState(() {
+                      _mediaManagerExpanded = !_mediaManagerExpanded;
+                    });
+                  },
+                  headerColor: Colors.cyan,
+                  borderColor: Colors.cyan,
+                  child: MediaManagerWidget(
+                    receivedFiles: _receivedFiles,
+                    receivedImages: _receivedImages,
+                    onSaveFile: _saveFile,
+                  ),
+                ),
               
               // 输入模式选择 - 可折叠
               if (!_isMinimalMode)
