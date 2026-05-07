@@ -463,10 +463,9 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.send),
-                              onPressed: _manualSend,
-                              tooltip: '手动发送',
-                              iconSize: 20,
+                              icon: const Icon(Icons.attach_file),
+                              onPressed: _pickFile,
+                              tooltip: '添加文件/图片',
                             ),
                             IconButton(
                               icon: const Icon(Icons.clear),
@@ -475,9 +474,10 @@ class _AndroidVoiceClientPageState extends State<_AndroidVoiceClientPage> {
                               iconSize: 20,
                             ),
                             IconButton(
-                              icon: const Icon(Icons.attach_file),
-                              onPressed: _pickFile,
-                              tooltip: '添加文件/图片',
+                              icon: const Icon(Icons.send),
+                              onPressed: _manualSend,
+                              tooltip: '手动发送',
+                              iconSize: 20,
                             ),
                           ],
                         ),
